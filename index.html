@@ -507,8 +507,14 @@
             if (storedData) {
                 aqiData = JSON.parse(storedData);
                 // Check if data is outdated (missing 2026 or missing max metrics)
+                // We also check if a sample country has the new max fields
                 if (aqiData["France"] && aqiData["France"].monthly[2026] && aqiData["France"].monthly[2026][1] && aqiData["France"].monthly[2026][1].aqi_max !== undefined) {
-                    return;
+                    // Data seems up to date, but let's ensure all countries in COUNTRIES have data
+                    let allPresent = true;
+                    COUNTRIES.forEach(c => {
+                        if (!aqiData[c]) allPresent = false;
+                    });
+                    if (allPresent) return;
                 }
             }
 
@@ -523,8 +529,11 @@
             };
 
             COUNTRIES.forEach(c => {
+                // If data already exists and is not outdated (has aqi_max), we could skip, 
+                // but initializeData is often called when a full reset is needed.
+                // To be safe for custom cities, we provide a default base if not in basePm25.
                 aqiData[c] = { yearly: {}, monthly: {} };
-                let currentBase = basePm25[c];
+                let currentBase = basePm25[c] || (10 + Math.random() * 20);
                 
                 YEARS.forEach(y => {
                     
@@ -1121,7 +1130,7 @@
                         valNo2 = getYearlyMax(c, currentYear, 'no2');
                     }
                 } else {
-                    const monthData = aqiData[c].monthly[currentYear]?.[currentMonth];
+                    const monthData = aqiData[c]?.monthly?.[currentYear]?.[currentMonth];
                     if (globalDisplayMode === 'average') {
                         valAqi = monthData?.aqi ?? null;
                         valPm25 = monthData?.pm25 ?? null;
@@ -1143,7 +1152,7 @@
                     no2: valNo2,
                     currentVal: globalMetric === 'aqi' ? valAqi : (globalMetric === 'pm25' ? valPm25 : (globalMetric === 'pm10' ? valPm10 : valNo2))
                 };
-            }).filter(d => d.currentVal !== null);
+            }).filter(d => d.currentVal !== null && d.currentVal !== undefined && !isNaN(d.currentVal));
 
             dataForYear.sort((a, b) => b.currentVal - a.currentVal);
 
@@ -1276,7 +1285,7 @@
         }
 
         function getMetricColor(val, metric) {
-            if (val === null) return 'text-slate-400';
+            if (val === null || val === undefined || isNaN(val)) return 'text-slate-400';
             // Simple thresholds for demo
             let high = metric === 'aqi' ? 100 : (metric === 'pm25' ? 25 : (metric === 'pm10' ? 40 : 20));
             let med = metric === 'aqi' ? 50 : (metric === 'pm25' ? 10 : (metric === 'pm10' ? 20 : 10));
@@ -1287,6 +1296,7 @@
         }
 
         function getChartColor(val, metric) {
+            if (val === null || val === undefined || isNaN(val)) return '#cbd5e1';
             let high = metric === 'aqi' ? 100 : (metric === 'pm25' ? 25 : (metric === 'pm10' ? 40 : 20));
             let med = metric === 'aqi' ? 50 : (metric === 'pm25' ? 10 : (metric === 'pm10' ? 20 : 10));
             
