@@ -506,8 +506,8 @@
             const storedData = localStorage.getItem('aqiData');
             if (storedData) {
                 aqiData = JSON.parse(storedData);
-                // Check if data is outdated (missing 2026 or missing aqi metric)
-                if (aqiData["France"] && aqiData["France"].yearly[2026] && aqiData["France"].yearly[2026].aqi !== undefined) {
+                // Check if data is outdated (missing 2026 or missing max metrics)
+                if (aqiData["France"] && aqiData["France"].monthly[2026] && aqiData["France"].monthly[2026][1] && aqiData["France"].monthly[2026][1].aqi_max !== undefined) {
                     return;
                 }
             }
@@ -562,11 +562,22 @@
                         
                         let monthlyAqi = calculateAQI(monthlyPm25, monthlyPm10, monthlyNo2);
                         
+                        // Generate max values (simulating a peak day)
+                        let maxFactor = 1.3 + Math.random() * 0.4; // 1.3x to 1.7x the average
+                        let maxPm25 = monthlyPm25 * maxFactor;
+                        let maxPm10 = monthlyPm10 * maxFactor;
+                        let maxNo2 = monthlyNo2 * maxFactor;
+                        let maxAqi = calculateAQI(maxPm25, maxPm10, maxNo2);
+                        
                         aqiData[c].monthly[y][m] = { 
                             pm25: parseFloat(monthlyPm25.toFixed(1)), 
                             pm10: parseFloat(monthlyPm10.toFixed(1)), 
                             no2: parseFloat(monthlyNo2.toFixed(1)),
-                            aqi: monthlyAqi
+                            aqi: monthlyAqi,
+                            pm25_max: parseFloat(maxPm25.toFixed(1)),
+                            pm10_max: parseFloat(maxPm10.toFixed(1)),
+                            no2_max: parseFloat(maxNo2.toFixed(1)),
+                            aqi_max: maxAqi
                         };
                     });
                 });
@@ -589,8 +600,9 @@
             let max = -Infinity;
             let found = false;
             Object.values(monthsData).forEach(m => {
-                if (m[metric] !== undefined && m[metric] !== null) {
-                    if (m[metric] > max) max = m[metric];
+                const val = m[metric + '_max'] ?? m[metric];
+                if (val !== undefined && val !== null) {
+                    if (val > max) max = val;
                     found = true;
                 }
             });
@@ -932,12 +944,22 @@
                         let monthlyPm10 = monthlyPm25 * 1.8;
                         let monthlyNo2 = monthlyPm25 * 0.9;
                         
+                        // Max values
+                        let maxFactor = 1.3 + Math.random() * 0.4;
+                        let maxPm25 = monthlyPm25 * maxFactor;
+                        let maxPm10 = monthlyPm10 * maxFactor;
+                        let maxNo2 = monthlyNo2 * maxFactor;
+                        
                         if (!aqiData[keyToUse].monthly[y]) aqiData[keyToUse].monthly[y] = {};
                         aqiData[keyToUse].monthly[y][m] = {
                             pm25: Math.round(monthlyPm25 * 10) / 10,
                             pm10: Math.round(monthlyPm10 * 10) / 10,
                             no2: Math.round(monthlyNo2 * 10) / 10,
-                            aqi: calculateAQI(monthlyPm25, monthlyPm10, monthlyNo2)
+                            aqi: calculateAQI(monthlyPm25, monthlyPm10, monthlyNo2),
+                            pm25_max: Math.round(maxPm25 * 10) / 10,
+                            pm10_max: Math.round(maxPm10 * 10) / 10,
+                            no2_max: Math.round(maxNo2 * 10) / 10,
+                            aqi_max: calculateAQI(maxPm25, maxPm10, maxNo2)
                         };
                     });
                 });
@@ -1099,12 +1121,18 @@
                         valNo2 = getYearlyMax(c, currentYear, 'no2');
                     }
                 } else {
-                    // For a single month, Average and Max are the same (the month's value)
                     const monthData = aqiData[c].monthly[currentYear]?.[currentMonth];
-                    valAqi = monthData?.aqi ?? null;
-                    valPm25 = monthData?.pm25 ?? null;
-                    valPm10 = monthData?.pm10 ?? null;
-                    valNo2 = monthData?.no2 ?? null;
+                    if (globalDisplayMode === 'average') {
+                        valAqi = monthData?.aqi ?? null;
+                        valPm25 = monthData?.pm25 ?? null;
+                        valPm10 = monthData?.pm10 ?? null;
+                        valNo2 = monthData?.no2 ?? null;
+                    } else {
+                        valAqi = monthData?.aqi_max ?? monthData?.aqi ?? null;
+                        valPm25 = monthData?.pm25_max ?? monthData?.pm25 ?? null;
+                        valPm10 = monthData?.pm10_max ?? monthData?.pm10 ?? null;
+                        valNo2 = monthData?.no2_max ?? monthData?.no2 ?? null;
+                    }
                 }
                 
                 return {
@@ -1315,7 +1343,12 @@
                     }
                     labels.push(`${MONTH_NAMES[m-1]} ${y}`);
                     const monthData = aqiData[currentCountry]?.monthly[y]?.[m];
-                    chartData.push(monthData ? monthData[zoomMetric] : null);
+                    if (monthData) {
+                        const val = zoomDisplayMode === 'average' ? monthData[zoomMetric] : (monthData[zoomMetric + '_max'] || monthData[zoomMetric]);
+                        chartData.push(val);
+                    } else {
+                        chartData.push(null);
+                    }
                 }
                 chartTitle.textContent = `Monthly Trend (Last 12 Months)`;
             }
@@ -1465,8 +1498,9 @@
             const metricLabel = newsMetric.toUpperCase();
             
             COUNTRIES.forEach(country => {
-                const val = aqiData[country]?.monthly?.[recentYear]?.[recentMonth]?.[newsMetric];
-                if (val) {
+                const monthData = aqiData[country]?.monthly?.[recentYear]?.[recentMonth];
+                if (monthData) {
+                    const val = monthData[newsMetric + '_max'] || monthData[newsMetric];
                     let high = newsMetric === 'aqi' ? 100 : (newsMetric === 'pm25' ? 25 : (newsMetric === 'pm10' ? 40 : 20));
                     let med = newsMetric === 'aqi' ? 50 : (newsMetric === 'pm25' ? 10 : (newsMetric === 'pm10' ? 20 : 10));
 
