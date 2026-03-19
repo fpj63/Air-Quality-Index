@@ -70,6 +70,10 @@
                         <button class="global-metric-toggle px-3 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200" data-metric="no2">NO2</button>
                     </div>
                     <div class="flex space-x-2">
+                        <div class="flex bg-slate-100 p-1 rounded-lg mr-2">
+                            <button class="global-mode-toggle active px-3 py-1 text-xs font-medium rounded-md bg-white shadow-sm text-slate-800" data-mode="average">Average</button>
+                            <button class="global-mode-toggle px-3 py-1 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700" data-mode="max">Max</button>
+                        </div>
                         <select id="global-month-filter" class="border border-slate-300 rounded-md px-3 py-1.5 bg-white text-sm">
                             <option value="all">All Year</option>
                         </select>
@@ -168,6 +172,10 @@
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-semibold" id="zoom-chart-title">Historical Trend (2015-2026)</h2>
                     <div class="flex items-center">
+                        <div class="flex bg-slate-100 p-1 rounded-lg mr-4">
+                            <button class="zoom-mode-toggle active px-3 py-1 text-xs font-medium rounded-md bg-white shadow-sm text-slate-800" data-mode="average">Average</button>
+                            <button class="zoom-mode-toggle px-3 py-1 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700" data-mode="max">Max</button>
+                        </div>
                         <div class="flex space-x-2 mr-4 border-r border-slate-200 pr-4">
                             <button class="zoom-type-toggle active px-3 py-1 text-xs font-medium rounded-full bg-slate-800 text-white" data-type="yearly">Yearly</button>
                             <button class="zoom-type-toggle px-3 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200" data-type="monthly">Monthly</button>
@@ -194,7 +202,10 @@
             <div class="flex justify-between items-end">
                 <div>
                     <h1 class="text-3xl font-bold text-slate-900">Live News & Alerts</h1>
-                    <p class="text-slate-500 mt-1">Real-time air quality updates and alerts</p>
+                    <div class="flex items-center space-x-2 mt-1">
+                        <p class="text-slate-500">Real-time air quality updates and alerts</p>
+                        <span id="news-last-updated" class="text-[10px] font-medium bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200"></span>
+                    </div>
                 </div>
                 <div class="flex space-x-2">
                     <button class="news-metric-toggle active px-3 py-1 text-xs font-medium rounded-full bg-slate-800 text-white" data-metric="aqi">AQI</button>
@@ -571,13 +582,30 @@
             return aqiData[country]?.yearly[year]?.[metric] ?? null;
         }
 
+        // Helper to get yearly max
+        function getYearlyMax(country, year, metric) {
+            const monthsData = aqiData[country]?.monthly[year];
+            if (!monthsData) return null;
+            let max = -Infinity;
+            let found = false;
+            Object.values(monthsData).forEach(m => {
+                if (m[metric] !== undefined && m[metric] !== null) {
+                    if (m[metric] > max) max = m[metric];
+                    found = true;
+                }
+            });
+            return found ? max : null;
+        }
+
         // --- STATE ---
         let currentYear = 2026;
         let currentMonth = new Date().getMonth() + 1; // Current month (1-12)
         let currentCountry = "France";
         let globalMetric = "aqi";
+        let globalDisplayMode = "average";
         let zoomMetric = "aqi";
         let zoomGraphType = "yearly";
+        let zoomDisplayMode = "average";
         let newsMetric = "aqi";
         let globalChartInstance = null;
         let zoomChartInstance = null;
@@ -673,6 +701,22 @@
             setupMetricToggles('.zoom-metric-toggle', 'zoom', updateZoomView);
             setupMetricToggles('.news-metric-toggle', 'news', updateNewsView);
 
+            // Global Mode Toggles
+            const globalModeToggles = document.querySelectorAll('.global-mode-toggle');
+            globalModeToggles.forEach(toggle => {
+                toggle.addEventListener('click', (e) => {
+                    globalModeToggles.forEach(t => {
+                        t.classList.remove('active', 'bg-white', 'shadow-sm', 'text-slate-800');
+                        t.classList.add('text-slate-500');
+                    });
+                    e.currentTarget.classList.add('active', 'bg-white', 'shadow-sm', 'text-slate-800');
+                    e.currentTarget.classList.remove('text-slate-500');
+                    
+                    globalDisplayMode = e.currentTarget.getAttribute('data-mode');
+                    updateGlobalView();
+                });
+            });
+
             // Zoom Type Toggles
             const zoomTypeToggles = document.querySelectorAll('.zoom-type-toggle');
             zoomTypeToggles.forEach(toggle => {
@@ -685,6 +729,22 @@
                     e.currentTarget.classList.add('bg-slate-800', 'text-white');
                     
                     zoomGraphType = e.currentTarget.getAttribute('data-type');
+                    updateZoomView();
+                });
+            });
+
+            // Zoom Mode Toggles
+            const zoomModeToggles = document.querySelectorAll('.zoom-mode-toggle');
+            zoomModeToggles.forEach(toggle => {
+                toggle.addEventListener('click', (e) => {
+                    zoomModeToggles.forEach(t => {
+                        t.classList.remove('active', 'bg-white', 'shadow-sm', 'text-slate-800');
+                        t.classList.add('text-slate-500');
+                    });
+                    e.currentTarget.classList.add('active', 'bg-white', 'shadow-sm', 'text-slate-800');
+                    e.currentTarget.classList.remove('text-slate-500');
+                    
+                    zoomDisplayMode = e.currentTarget.getAttribute('data-mode');
                     updateZoomView();
                 });
             });
@@ -989,7 +1049,25 @@
         // --- GLOBAL VIEW LOGIC ---
         function updateGlobalView() {
             const metricLabel = globalMetric.toUpperCase();
-            const monthStr = currentMonth === "all" ? "Yearly Average" : MONTH_NAMES[currentMonth - 1];
+            const isYearly = currentMonth === "all";
+            
+            // Update toggle buttons UI based on currentMonth and globalDisplayMode
+            const globalModeToggles = document.querySelectorAll('.global-mode-toggle');
+            globalModeToggles.forEach(t => {
+                const mode = t.getAttribute('data-mode');
+                const isActive = mode === globalDisplayMode;
+                
+                if (isActive) {
+                    t.classList.add('active', 'bg-white', 'shadow-sm', 'text-slate-800');
+                    t.classList.remove('text-slate-500');
+                } else {
+                    t.classList.remove('active', 'bg-white', 'shadow-sm', 'text-slate-800');
+                    t.classList.add('text-slate-500');
+                }
+            });
+
+            const modeStr = globalDisplayMode === 'average' ? "Average" : "Max";
+            const monthStr = isYearly ? `Yearly ${modeStr}` : `${MONTH_NAMES[currentMonth - 1]} (${modeStr})`;
             document.getElementById('global-date-display').textContent = `${monthStr} ${currentYear}`;
             document.getElementById('global-chart-title').textContent = `Regional Comparison (${metricLabel})`;
             document.getElementById('kpi-highest-label').textContent = `Highest ${metricLabel}`;
@@ -1007,12 +1085,21 @@
 
             const dataForYear = COUNTRIES.map(c => {
                 let valAqi, valPm25, valPm10, valNo2;
-                if (currentMonth === "all") {
-                    valAqi = getYearlyAverage(c, currentYear, 'aqi');
-                    valPm25 = getYearlyAverage(c, currentYear, 'pm25');
-                    valPm10 = getYearlyAverage(c, currentYear, 'pm10');
-                    valNo2 = getYearlyAverage(c, currentYear, 'no2');
+                
+                if (isYearly) {
+                    if (globalDisplayMode === 'average') {
+                        valAqi = getYearlyAverage(c, currentYear, 'aqi');
+                        valPm25 = getYearlyAverage(c, currentYear, 'pm25');
+                        valPm10 = getYearlyAverage(c, currentYear, 'pm10');
+                        valNo2 = getYearlyAverage(c, currentYear, 'no2');
+                    } else {
+                        valAqi = getYearlyMax(c, currentYear, 'aqi');
+                        valPm25 = getYearlyMax(c, currentYear, 'pm25');
+                        valPm10 = getYearlyMax(c, currentYear, 'pm10');
+                        valNo2 = getYearlyMax(c, currentYear, 'no2');
+                    }
                 } else {
+                    // For a single month, Average and Max are the same (the month's value)
                     const monthData = aqiData[c].monthly[currentYear]?.[currentMonth];
                     valAqi = monthData?.aqi ?? null;
                     valPm25 = monthData?.pm25 ?? null;
@@ -1097,9 +1184,22 @@
                             const index = elements[0].index;
                             const country = dataForYear[index].country;
                             
-                            // Set current country
+                            // Set current country and view type
                             currentCountry = country;
                             countrySelector.value = country;
+                            zoomGraphType = "monthly"; // Show last 12 months
+                            
+                            // Update zoom type toggles UI
+                            const zoomTypeToggles = document.querySelectorAll('.zoom-type-toggle');
+                            zoomTypeToggles.forEach(t => {
+                                if (t.getAttribute('data-type') === 'monthly') {
+                                    t.classList.add('bg-slate-800', 'text-white');
+                                    t.classList.remove('bg-slate-100', 'text-slate-600');
+                                } else {
+                                    t.classList.remove('bg-slate-800', 'text-white');
+                                    t.classList.add('bg-slate-100', 'text-slate-600');
+                                }
+                            });
                             
                             // Navigate to zoom page
                             navItems.forEach(nav => {
@@ -1175,10 +1275,29 @@
             const unit = zoomMetric === 'aqi' ? '' : ' µg/m³';
             const chartTitle = document.getElementById('zoom-chart-title');
 
+            // Update zoom mode toggles UI
+            const zoomModeToggles = document.querySelectorAll('.zoom-mode-toggle');
+            zoomModeToggles.forEach(t => {
+                const mode = t.getAttribute('data-mode');
+                const isActive = mode === zoomDisplayMode;
+                if (isActive) {
+                    t.classList.add('active', 'bg-white', 'shadow-sm', 'text-slate-800');
+                    t.classList.remove('text-slate-500');
+                } else {
+                    t.classList.remove('active', 'bg-white', 'shadow-sm', 'text-slate-800');
+                    t.classList.add('text-slate-500');
+                }
+            });
+
             if (zoomGraphType === 'yearly') {
                 labels = YEARS;
-                chartData = YEARS.map(y => getYearlyAverage(currentCountry, y, zoomMetric));
-                chartTitle.textContent = `Historical Trend (2015-2026)`;
+                if (zoomDisplayMode === 'average') {
+                    chartData = YEARS.map(y => getYearlyAverage(currentCountry, y, zoomMetric));
+                    chartTitle.textContent = `Historical Trend (Yearly Average, 2015-2026)`;
+                } else {
+                    chartData = YEARS.map(y => getYearlyMax(currentCountry, y, zoomMetric));
+                    chartTitle.textContent = `Historical Trend (Yearly Max, 2015-2026)`;
+                }
             } else {
                 // Monthly view - last 12 months from current date
                 const actualYear = new Date().getFullYear();
@@ -1316,6 +1435,22 @@
             const feed = document.getElementById('news-feed');
             feed.innerHTML = '';
             
+            const lastUpdatedEl = document.getElementById('news-last-updated');
+            if (lastUpdatedEl) {
+                const now = new Date();
+                const options = { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    second: '2-digit',
+                    hour12: true 
+                };
+                const formattedDate = now.toLocaleString('en-US', options);
+                lastUpdatedEl.textContent = `Last updated: ${formattedDate}`;
+            }
+            
             // Generate some dynamic alerts based on the current data
             const alerts = [];
             
@@ -1364,7 +1499,45 @@
                     <p class="text-sm opacity-90">${alert.desc}</p>
                     <p class="text-xs mt-3 opacity-70 flex items-center"><i data-lucide="clock" class="h-3 w-3 mr-1"></i> Just updated</p>
                 `;
-                div.addEventListener('click', () => showNewsModal(alert.country));
+                div.addEventListener('click', () => {
+                    // Set current country and view type
+                    currentCountry = alert.country;
+                    countrySelector.value = alert.country;
+                    zoomGraphType = "monthly";
+                    
+                    // Update zoom type toggles UI
+                    const zoomTypeToggles = document.querySelectorAll('.zoom-type-toggle');
+                    zoomTypeToggles.forEach(t => {
+                        if (t.getAttribute('data-type') === 'monthly') {
+                            t.classList.add('bg-slate-800', 'text-white');
+                            t.classList.remove('bg-slate-100', 'text-slate-600');
+                        } else {
+                            t.classList.remove('bg-slate-800', 'text-white');
+                            t.classList.add('bg-slate-100', 'text-slate-600');
+                        }
+                    });
+
+                    // Navigate to zoom page
+                    navItems.forEach(nav => {
+                        if (nav.getAttribute('data-target') === 'page-zoom') {
+                            nav.classList.add('active');
+                        } else {
+                            nav.classList.remove('active');
+                        }
+                    });
+                    
+                    pages.forEach(p => {
+                        if (p.id === 'page-zoom') {
+                            p.classList.add('active');
+                        } else {
+                            p.classList.remove('active');
+                        }
+                    });
+                    
+                    setTimeout(() => {
+                        updateZoomView();
+                    }, 0);
+                });
                 feed.appendChild(div);
             });
             lucide.createIcons();
@@ -1379,31 +1552,39 @@
             
             title.textContent = `Last 12 Months: ${getDisplayName(country)} (${metricLabel})`;
             
-            // Get last 12 months of data (assuming currentYear is the latest year, we'll just show all 12 months of currentYear for simplicity)
-            const actualYear = new Date().getFullYear();
-            const actualMonth = new Date().getMonth() + 1;
+            // Get last 12 months of data
+            const now = new Date();
+            let endMonth = now.getMonth() + 1; // 1-12
+            let endYear = now.getFullYear();
             
-            const chartData = MONTHS.map(m => {
-                if (currentYear === actualYear && m > actualMonth) return null;
-                const monthData = aqiData[country].monthly[currentYear]?.[m];
-                return monthData ? monthData[newsMetric] : null;
-            });
-
+            const labels = [];
+            const chartData = [];
+            const limitData = [];
+            
+            for (let i = 11; i >= 0; i--) {
+                let m = endMonth - i;
+                let y = endYear;
+                if (m <= 0) {
+                    m += 12;
+                    y -= 1;
+                }
+                labels.push(`${MONTH_NAMES[m-1]} ${y}`);
+                
+                const monthData = aqiData[country].monthly[y]?.[m];
+                chartData.push(monthData ? monthData[newsMetric] : null);
+                limitData.push(limit);
+            }
+            
             const ctx = document.getElementById('newsChart').getContext('2d');
             if (newsChartInstance) newsChartInstance.destroy();
-
-            const limitData = MONTHS.map(m => {
-                if (currentYear === actualYear && m > actualMonth) return null;
-                return limit;
-            });
 
             newsChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: MONTH_NAMES,
+                    labels: labels,
                     datasets: [
                         {
-                            label: `${metricLabel} in ${country} (${currentYear})`,
+                            label: `${metricLabel} in ${country}`,
                             data: chartData,
                             borderColor: '#10b981',
                             backgroundColor: 'rgba(16, 185, 129, 0.1)',
