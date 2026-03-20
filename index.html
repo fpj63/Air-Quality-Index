@@ -70,9 +70,12 @@
                         <button class="global-metric-toggle px-3 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200" data-metric="no2">NO2</button>
                     </div>
                     <div class="flex space-x-2">
-                        <div class="flex bg-slate-100 p-1 rounded-lg mr-2">
-                            <button class="global-mode-toggle active px-3 py-1 text-xs font-medium rounded-md bg-white shadow-sm text-slate-800" data-mode="average">Average</button>
-                            <button class="global-mode-toggle px-3 py-1 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700" data-mode="max">Max</button>
+                        <div class="flex items-center">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-2">Mode:</span>
+                            <div class="flex bg-slate-100 p-1 rounded-lg mr-2">
+                                <button class="global-mode-toggle active px-3 py-1 text-xs font-medium rounded-md bg-blue-600 text-white shadow-md" data-mode="average">Average</button>
+                                <button class="global-mode-toggle px-3 py-1 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700" data-mode="max">Max</button>
+                            </div>
                         </div>
                         <select id="global-month-filter" class="border border-slate-300 rounded-md px-3 py-1.5 bg-white text-sm">
                             <option value="all">All Year</option>
@@ -172,8 +175,9 @@
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-semibold" id="zoom-chart-title">Historical Trend (2015-2026)</h2>
                     <div class="flex items-center">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-2">Mode:</span>
                         <div class="flex bg-slate-100 p-1 rounded-lg mr-4">
-                            <button class="zoom-mode-toggle active px-3 py-1 text-xs font-medium rounded-md bg-white shadow-sm text-slate-800" data-mode="average">Average</button>
+                            <button class="zoom-mode-toggle active px-3 py-1 text-xs font-medium rounded-md bg-blue-600 text-white shadow-md" data-mode="average">Average</button>
                             <button class="zoom-mode-toggle px-3 py-1 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700" data-mode="max">Max</button>
                         </div>
                         <div class="flex space-x-2 mr-4 border-r border-slate-200 pr-4">
@@ -220,7 +224,7 @@
         </div>
 
         <!-- Search Sources Page -->
-        <div id="page-search" class="page hidden space-y-6">
+        <div id="page-search" class="page space-y-6">
             <div class="flex justify-between items-end">
                 <div>
                     <h1 class="text-3xl font-bold text-slate-900">Search External Sources</h1>
@@ -266,7 +270,7 @@
         </div>
 
         <!-- About AQI Page -->
-        <div id="page-about" class="page hidden space-y-6">
+        <div id="page-about" class="page space-y-6">
             <div>
                 <h1 class="text-3xl font-bold text-slate-900">About AQI & Guidelines</h1>
                 <p class="text-slate-500 mt-1">Understanding Air Quality Index and WHO Limits.</p>
@@ -727,11 +731,11 @@
             globalModeToggles.forEach(toggle => {
                 toggle.addEventListener('click', (e) => {
                     globalModeToggles.forEach(t => {
-                        t.classList.remove('active', 'bg-white', 'shadow-sm', 'text-slate-800');
-                        t.classList.add('text-slate-500');
+                        t.classList.remove('active', 'bg-blue-600', 'text-white', 'shadow-md');
+                        t.classList.add('text-slate-500', 'hover:bg-slate-200');
                     });
-                    e.currentTarget.classList.add('active', 'bg-white', 'shadow-sm', 'text-slate-800');
-                    e.currentTarget.classList.remove('text-slate-500');
+                    e.currentTarget.classList.add('active', 'bg-blue-600', 'text-white', 'shadow-md');
+                    e.currentTarget.classList.remove('text-slate-500', 'hover:bg-slate-200');
                     
                     globalDisplayMode = e.currentTarget.getAttribute('data-mode');
                     updateGlobalView();
@@ -759,11 +763,11 @@
             zoomModeToggles.forEach(toggle => {
                 toggle.addEventListener('click', (e) => {
                     zoomModeToggles.forEach(t => {
-                        t.classList.remove('active', 'bg-white', 'shadow-sm', 'text-slate-800');
-                        t.classList.add('text-slate-500');
+                        t.classList.remove('active', 'bg-blue-600', 'text-white', 'shadow-md');
+                        t.classList.add('text-slate-500', 'hover:bg-slate-200');
                     });
-                    e.currentTarget.classList.add('active', 'bg-white', 'shadow-sm', 'text-slate-800');
-                    e.currentTarget.classList.remove('text-slate-500');
+                    e.currentTarget.classList.add('active', 'bg-blue-600', 'text-white', 'shadow-md');
+                    e.currentTarget.classList.remove('text-slate-500', 'hover:bg-slate-200');
                     
                     zoomDisplayMode = e.currentTarget.getAttribute('data-mode');
                     updateZoomView();
@@ -1017,7 +1021,10 @@
                     showToast('Please enter a location to search.', 'error');
                     return;
                 }
-                window.open(`https://explore.openaq.org/?q=${encodeURIComponent(query)}`, '_blank');
+                showToast('Opening OpenAQ Explorer...', 'info');
+                // OpenAQ Explorer base URL - using the main explore page which is more reliable
+                const url = 'https://explore.openaq.org/';
+                window.open(url, '_blank');
             };
 
             document.getElementById('btn-external-search').addEventListener('click', performExternalSearch);
@@ -1026,9 +1033,7 @@
             });
 
             document.getElementById('link-openaq').addEventListener('click', () => {
-                const query = document.getElementById('external-search-input').value.trim();
-                const url = query ? `https://explore.openaq.org/?q=${encodeURIComponent(query)}` : 'https://explore.openaq.org/';
-                window.open(url, '_blank');
+                window.open('https://explore.openaq.org/', '_blank');
             });
 
             document.getElementById('link-who').addEventListener('click', () => {
@@ -1089,11 +1094,11 @@
                 const isActive = mode === globalDisplayMode;
                 
                 if (isActive) {
-                    t.classList.add('active', 'bg-white', 'shadow-sm', 'text-slate-800');
-                    t.classList.remove('text-slate-500');
+                    t.classList.add('active', 'bg-blue-600', 'text-white', 'shadow-md');
+                    t.classList.remove('text-slate-500', 'hover:bg-slate-200');
                 } else {
-                    t.classList.remove('active', 'bg-white', 'shadow-sm', 'text-slate-800');
-                    t.classList.add('text-slate-500');
+                    t.classList.remove('active', 'bg-blue-600', 'text-white', 'shadow-md');
+                    t.classList.add('text-slate-500', 'hover:bg-slate-200');
                 }
             });
 
@@ -1319,11 +1324,11 @@
                 const mode = t.getAttribute('data-mode');
                 const isActive = mode === zoomDisplayMode;
                 if (isActive) {
-                    t.classList.add('active', 'bg-white', 'shadow-sm', 'text-slate-800');
-                    t.classList.remove('text-slate-500');
+                    t.classList.add('active', 'bg-blue-600', 'text-white', 'shadow-md');
+                    t.classList.remove('text-slate-500', 'hover:bg-slate-200');
                 } else {
-                    t.classList.remove('active', 'bg-white', 'shadow-sm', 'text-slate-800');
-                    t.classList.add('text-slate-500');
+                    t.classList.remove('active', 'bg-blue-600', 'text-white', 'shadow-md');
+                    t.classList.add('text-slate-500', 'hover:bg-slate-200');
                 }
             });
 
